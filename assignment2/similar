@@ -1,0 +1,220 @@
+#!/usr/bin/php
+<?php
+
+//
+// similar
+//
+
+// include the common PHP code file
+require("a2.php");
+
+// PROGRAM BODY BEGINS
+
+$usage = "Usage: $argv[0] movieName Nsimilarmovies";
+$db = dbConnect(DB_CONNECTION);
+
+// Check arguments
+if (count($argv) < 3) exit("$usage\n");
+
+// Get the return results    
+    $movie = $argv[1]; //movie title (case insensitive)
+    $val = $argv[2]; // number of results
+    $print_limit = 0;
+    //movie (year) [number of common genres, max number of common plot keywords, imdb rating, votes]
+    $printed = array();
+    //get the movie
+    $q = "select movie.title, movie.year, genre.genre from movie join genre on movie.id = genre.movie_id where movie.title ILIKE %s order by movie.year DESC";
+    $genres = array(); //array of genres
+    $i = 0;
+    $prev_year = 3000;
+    $r = dbQuery($db, mkSQL($q, $movie));
+    $string = "";
+    while ($t = dbNext($r)) {
+        //$t[0] = title $t[1] = year $t[2] = genre
+        //if the year is different it is a different movie so we stop
+        if ($i != 0 and $t[1] != $prev_year) {
+            break;
+        }
+        $genres[$i] = $t[2];
+        if ($i == 0) {
+            $string = "$t[2]";
+        } else {
+            $string = "{$string},$t[2]";
+        }
+        $i++;
+        $prev_year = $t[1];
+    }
+    $string = "({$string})";
+    //echo("$string");
+    $genres_count = count($genres);
+    
+    // get list of keywords from $movie
+    $qk = "select movie.title, movie.year, keyword.keyword from movie join keyword on movie.id = keyword.movie_id where movie.title ILIKE %s order by movie.year DESC";
+    $ik = 0;
+    $rk = dbQuery($db, mkSQL($qk, $movie));
+    $keywords = array(); //array of keywords
+    while ($tk = dbNext($rk)) {
+        //$tk[0] = title $tk[1] = year $tk[2] = keyword
+        //if the year is different it is a different movie so we stop
+        if ($ik != 0 and $tk[1] != $prev_year) {
+            break;
+        }
+        $keywords[$ik] = $tk[2];
+        $ik++;
+        $prev_year = $tk[1];
+    }
+    $keywords_count = count($keywords);
+    //now go through all movies and pick out movies with the most 
+    //genre matches
+    $q1 = "select movie.title, genre.genre, movie.id from movie join genre on movie.id = genre.movie_id where movie.title != %s";
+        
+    // COMPUTATION //
+    $j = 0;
+    $i2 = 1;
+    //outer loop goes from max genre matches -1 each iteration
+    while ($print_limit < $val) {
+        $r1 = dbQuery($db, mkSQL($q1, $movie));
+        $i = 1;
+        $prev = "xz";
+        $prev2 = "xz";
+        $count = 0;
+        $movie_count = 0;
+        $movie_titles = array();
+        //go through all movies 
+        while ($t = dbNext($r1)) {
+            if ($prev != $t[0]) {
+                $count = 0;
+            }
+            if ((in_array($t[1], $genres)) and $count != $genres_count) {
+                $count++;
+                if ($count == $genres_count) {
+                    //now we have a movie with all genres
+                    array_push($movie_titles, $t[2]); //add to list of movie IDs
+                    $movie_count++;
+                }
+            }
+            $prev = $t[0];
+        }
+       // print("666");
+       // print_r($movie_titles);
+       // print("666");
+        //print($movie_count);
+        if ($movie_count == 0) {
+            $genres_count--;
+            continue;
+        }
+        //print($genres_count);
+        //now sort movies by matching keywords
+        $q2 = "select movie.title, keyword.keyword, movie.id from movie join keyword on movie.id = keyword.movie_id where movie.id = %d order by movie.year DESC";
+        $k = $keywords_count;        
+        $countK = 0;
+        $prev3 = -1;       
+        //outer loop,amount of keywords matched decrements by 1 each loop
+        while ($k >= 0 and $print_limit < $val) {
+            $amount = 0;
+            $sorted = array();      //array of movies with k amount of keyword matches       
+            //each loop for 1 movie
+            // if movie matches with k keywords add to $sorted
+            while ($amount < $movie_count) {
+                $r2 = dbQuery($db, mkSQL($q2, $movie_titles[$amount]));
+                $sort_count = 0;
+                $countK = 0;
+                
+                // for each keyword
+                while ($t2 = dbNext($r2)) {
+                    //if movie ID is different, restart the keyword counter
+                    if ($t2[2] != $prev3) {
+                        $countK = 0;
+                    }
+                    if (in_array($t2[1], $keywords) and $countK < $k) {
+                        $countK++;
+                        if (($countK == $k and !in_array($t2[2], $sorted))) {
+                            array_push($sorted, $t2[2]);
+                            $sort_count++;
+                        }
+                    }
+                    if ($k == 0 and !in_array($t2[2], $sorted) and !in_array($t2[2], $printed)) {
+                        array_push($sorted, $t2[2]);                            
+                        $sort_count++;
+                    }
+                    $prev3 = $t2[2];  
+                }                                              
+                $amount++;
+            }
+            //print("//////");
+            //print_r($sorted);
+            //print("//////");
+            if (count($sorted) > 0) {
+                
+                $o = 0;
+                
+                $q10 = "select rating.imdb_score, rating.num_voted_users from rating join movie on movie.id = rating.movie_id where movie.id = %d";
+                $rating = array(); //imdb score
+                $rating2 = array(); //number of votes
+                $r10 = dbQuery($db, mkSQL($q10, $sorted[$o]));
+                while ($o < count($sorted)) {
+                    $r10 = dbQuery($db, mkSQL($q10, $sorted[$o]));
+                    $t0 = dbNext($r10);
+                    $rating[$o] = $t0[0];     
+                    $rating2[$o] = $t0[1];   
+                    $o++;                   
+                }
+                rsort($rating); //imdb score highest to lowest
+                array_unique($rating);
+                rsort($rating2);
+                
+                // gives all movies with same rating in order of votes DESC
+                $i13 = 0;
+                $q13 = "select movie.title, rating.imdb_score, rating.num_voted_users, movie.id from rating join movie on movie.id = rating.movie_id where rating.imdb_score = %f order by rating.num_voted_users DESC";
+                
+                $score = 0;
+                $r13 = dbQuery($db, mkSQL($q13, $rating[$i13]));
+                while ($i13 < count($rating)) {
+                //every movie with rating of rating at $i13
+                $same_rating = array();
+                while ($t13 = dbNext($r13)) {
+                    $score = $t13[1];
+                    if (in_array($t13[3], $sorted)) {
+                        array_push($same_rating, $t13[3]);
+                    }
+                }                    
+                $q3 = "select movie.title, movie.year, rating.imdb_score, rating.num_voted_users, movie.id from movie join rating on movie.id = rating.movie_id where movie.id = %d";
+        $r_count = 0;
+        //go through every element of the same rating list
+        while ($r_count < count($same_rating) and $print_limit < $val) {
+        //printing each one out
+        //while ($print_limit < $val) {            
+            $f = dbQuery($db, mkSQL($q3, $same_rating[$r_count]));
+            $t1 = dbNext($f);
+            if (!in_array($t1[4], $printed)) {
+                echo "$i2. $t1[0] ";
+                if (!empty($t1[1])) {
+                    echo"($t1[1]) ";
+                }
+                echo "[$genres_count, $k, $t1[2], $t1[3]]\n";
+                array_push($printed, $t1[4]);
+                $i2++;
+                $print_limit++;
+            }
+        //}
+        $r_count++;
+        }
+    
+    $i13++;
+    if ($i13 == count($rating)) {
+        break;
+    }        
+    $r13 = dbQuery($db, mkSQL($q13, $rating[$i13]));                    
+    }
+}
+    $k--;
+    }        
+        //print_r($sorted);   
+        
+        //we have a list of movies now we will search for the movies and output the results as needed (in order of number of votes)
+        //movie (year) [number of common genres, max number of common plot keywords, imdb rating, votes]
+        
+        
+        $genres_count = $genres_count - 1;        
+    }
+?>

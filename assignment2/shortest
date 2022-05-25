@@ -1,0 +1,77 @@
+#!/usr/bin/php
+<?php
+
+//
+// shortest
+//
+
+// include the common PHP code file
+require("a2.php");
+
+// PROGRAM BODY BEGINS
+
+$usage = "Usage: $argv[0] actor1 actor2";
+$db = dbConnect(DB_CONNECTION);
+
+// Check arguments
+if (count($argv) < 3) exit("$usage\n");
+
+// Get the return results
+$a1 = "$argv[1]"; //first actor
+$a2 = "$argv[2]"; //target actor
+
+$i = 1;
+$string = "";
+
+$q1 = "select actor.id, actor.name from actor where actor.name ILIKE %s";
+
+$r1 = dbQuery($db, mkSQL($q1, $a1));
+$t1 = dbNext($r1);
+$a3 = $t1[0]; //id of actor1
+$z1 = $t1[1]; //name of actor 1
+
+$r2 = dbQuery($db, mkSQL($q1, $a2));
+$t2 = dbNext($r2);
+$a4 = $t2[0]; //id of actor2
+$z2 = $t2[1]; //name of actor 2
+
+//degree 1
+$i = find($z1, $z2, $a3, $a4, $i, $db, $string);
+
+$q2 = "select acting.movie_id, movie.year, movie.title from acting join movie on acting.movie_id = movie.id where acting.actor_id = %d order by movie.title ASC";
+$q3 = "select acting.actor_id from acting where acting.movie_id = %d";
+//degree2
+if ($i == 1) {
+    // go through every movie that actor 1 is in
+    // for every movie, take every actor and do find with that actor as actor1
+    $q2 = "select acting.movie_id, movie.year, movie.title from acting join movie on acting.movie_id = movie.id where acting.actor_id = %d order by movie.title ASC";
+    $r3 = dbQuery($db, mkSQL($q2, $a3));
+    $q3 = "select acting.actor_id, actor.name from acting join actor on acting.actor_id = actor.id where acting.movie_id = %d";
+    //get each movie that actor 1 appears in
+    //for each movie, look through all actors in that movie and if actor 2 is in, then found
+    while ($t3 = dbNext($r3)) {
+        $r4 = dbQuery($db, mkSQL($q3, $t3[0]));
+        while ($t4 = dbNext($r4)) {    
+            $string = "$z1 was in $t3[2] ($t3[1]) with ";
+            $i = find($t4[1], $z2, $t4[0], $a4, $i, $db, $string); 
+        }
+    }
+}
+
+//degree 3
+if ($i == 1) {
+    //get each movie that actor 1 appears in
+    //for each movie, look through all actors
+    //for each actor look at each movie they are in
+    //for each movie look at all the actors
+    //for each actor look at all their movies
+    //for each movie look at the actor and compare
+    while ($t3 = dbNext($r3)) {
+        $r4 = dbQuery($db, mkSQL($q3, $t3[0]));
+        while ($t4 = dbNext($r4)) {    
+            $string = "$z1 was in $t3[2] ($t3[1]) with ";
+            $i = find($t4[1], $z2, $t4[0], $a4, $i, $db, $string); 
+        }
+    }
+}
+?>

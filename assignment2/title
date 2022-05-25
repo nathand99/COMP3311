@@ -1,0 +1,54 @@
+#!/usr/bin/php
+<?php
+
+//
+// title - print out all the movie title, its year, its content rating, IMDB score and genres, of all the movies with given string IN its title
+//
+
+// include the common PHP code file
+require("a2.php");
+
+// PROGRAM BODY BEGINS
+
+$usage = "Usage: $argv[0] Title";
+$db = dbConnect(DB_CONNECTION);
+
+// Check arguments
+if (count($argv) < 2) exit("$usage\n");
+
+// Get the return results
+$val = "%$argv[1]%";
+$q = "select movie.title, movie.year, movie.content_rating, rating.imdb_score, genre.genre from movie join rating on movie.id = rating.movie_id join genre on movie.id = genre.movie_id where movie.title ILIKE %s order by movie.year ASC, rating.imdb_score DESC, movie.title ASC, genre.genre ASC";
+//echo(mkSQL($q, $val));
+$r = dbQuery($db, mkSQL($q, $val));
+// Iterate through the results and print
+$i = 1;
+$z = "z";
+while ($t = dbNext($r)) {
+  if ($t[0] == $z) {
+    echo ",$t[4]";
+  }
+  else {
+    if ($i != 1)
+      echo "]\n";
+  
+    echo "$i. $t[0] (";
+    if (!empty($t[1]))
+      echo "$t[1], ";
+      
+    if (!empty($t[2]))
+        echo "$t[2]";
+    if (!empty($t[3]))
+        echo ", $t[3]) ";
+      
+    if (!empty($t[4]))
+        echo "[$t[4]";    
+    $z = $t[0];
+    $i++;
+  }
+  
+}
+if ($i != 1) {
+    echo "]\n";
+}
+?>

@@ -1,0 +1,38 @@
+#!/usr/bin/php
+<?php
+
+//
+// acting - print out all the movie title, its director, its year, its content rating and IMDB score, one per line, of all the movies acted by the given actor
+//
+
+// include the common PHP code file
+require("a2.php");
+
+// PROGRAM BODY BEGINS
+
+$usage = "Usage: $argv[0] Actor Name";
+$db = dbConnect(DB_CONNECTION);
+
+// Check arguments
+if (count($argv) < 2) exit("$usage\n");
+
+// Get the return results
+$val = $argv[1];
+$q = "select movie.title, director.name, movie.year, movie.content_rating, rating.imdb_score from movie join director on movie.director_id = director.id join rating on movie.id = rating.movie_id join acting on movie.id = acting.movie_id join actor on acting.actor_id = actor.id where actor.name ILIKE %s order by movie.year ASC, movie.title ASC";
+//echo(mkSQL($q, $val));
+$r = dbQuery($db, mkSQL($q, $val));
+// Iterate through the results and print
+$i = 1;
+while ($t = dbNext($r)) {
+  echo "$i. $t[0] -- $t[1] (";
+  if (!empty($t[2]))
+    echo "$t[2]";
+  if (!empty($t[3]))
+      echo ", $t[3]";
+  if (!empty($t[4]))
+      echo ", $t[4]";
+  echo ")\n";
+  $i++;
+}
+
+?>

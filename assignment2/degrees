@@ -1,0 +1,55 @@
+#!/usr/bin/php
+<?php
+
+//
+// degrees
+//
+
+// include the common PHP code file
+require("a2.php");
+
+// PROGRAM BODY BEGINS
+
+$usage = "Usage: $argv[0] actor N M";
+//between N and M degrees of separation
+$db = dbConnect(DB_CONNECTION);
+
+// Check arguments
+if (count($argv) < 4) exit("$usage\n");
+
+// Get the return results
+$a1 = "$argv[1]"; //actor
+$n = "$argv[2]"; //min separation
+$m = "$argv[3]"; //max separation
+
+$i = 1;
+$string = "";
+
+$q1 = "select actor.id, actor.name from actor where actor.name ILIKE %s";
+
+$r1 = dbQuery($db, mkSQL($q1, $a1));
+$t1 = dbNext($r1);
+$a3 = $t1[0]; //id of actor1
+$z1 = $t1[1]; //name of actor 1
+
+//degree 1
+$q2 = "select acting.movie_id from acting where acting.actor_id = %d";
+$q3 = "select actor.name, acting.actor_id from acting join actor on acting.actor_id = actor.id where acting.movie_id = %d and acting.actor_id != %d order by actor.name ASC";
+$r3 = dbQuery($db, mkSQL($q2, $a3));
+$list = array();
+$i = 1;
+while ($t3 = dbNext($r3)) {
+    $r4 = dbQuery($db, mkSQL($q3, $t3[0], $a3));
+    while ($t4 = dbNext($r4)) {  
+        array_push($list, $t4[0]);        
+    }
+} 
+
+$k = 0;
+array_unique($list);
+while ($k < count($list)) {
+    echo"$i. $list[$k] (1)\n";
+    $k++;
+    $i++;
+}
+?>

@@ -1,0 +1,96 @@
+#!/usr/bin/php
+<?php
+
+//
+// toprank
+//
+
+// include the common PHP code file
+require("a2.php");
+
+// PROGRAM BODY BEGINS
+
+$usage = "Usage: $argv[0] genres Kresults startyear endyear";
+$db = dbConnect(DB_CONNECTION);
+
+// Check arguments
+if (count($argv) < 4) exit("$usage\n");
+
+// Get the return results
+if (count($argv) < 5) {
+    
+    $val = $argv[1];
+    $syear = $argv[2];
+    $eyear = $argv[3];
+    $q = "select movie.title, movie.year, movie.content_rating, movie.lang, rating.imdb_score, rating.num_voted_users from movie join rating on movie.id = rating.movie_id where movie.year >= %d and movie.year <= %d order by rating.imdb_score DESC, rating.num_voted_users DESC limit %d";
+
+    $r = dbQuery($db, mkSQL($q, $syear, $eyear, $val));
+    // Iterate through the results and print
+    $i = 1;
+    while ($t = dbNext($r)) {
+        echo "$i. $t[0] ($t[1], ";
+        if (!empty($t[2]))
+            echo "$t[2]";
+        if (!empty($t[3]))
+            echo ", $t[3])";
+        if (!empty($t[4]) and !empty($t[5]))
+            echo " [$t[4], $t[5]";
+        echo "]\n";
+        $i++;
+    }
+}
+else {
+    $genre = $argv[1];
+    $genres = explode("&", $genre); //array of genres
+    $counterT = count($genres); //number of genres
+    $val = $argv[2]; //number of results
+    $syear = $argv[3]; //start year
+    $eyear = $argv[4]; //end year
+    $q = "select movie.title, movie.year, movie.content_rating, movie.lang, rating.imdb_score, rating.num_voted_users from movie join rating on movie.id = rating.movie_id join genre on movie.id = genre.movie_id where movie.year >= %d and movie.year <= %d order by rating.imdb_score DESC, rating.num_voted_users DESC";
+    
+    $r = dbQuery($db, mkSQL($q, $syear, $eyear));
+    
+    $p = "select movie.title, genre.genre from movie join genre on movie.id = genre.movie_id where movie.title = %s";
+    $i = 1;
+    $prev2 = "xz";
+    $print_counter = 0;
+    //go through all movies between the years
+    while ($t = dbNext($r) and $print_counter < $val) {
+        $n = dbQuery($db, mkSQL($p, $t[0]));
+        if ($prev2 == $t[0]) {
+            continue;
+        }
+        $count = 0;   
+        $prev = 0;
+        //for each movie, make sure specified genres are inside its genres
+        //w[0] = title, w[1] = genre
+        while ($w = dbNext($n)) {
+            if ($prev != $w[0]) {
+                $count = 0;
+            }
+            if ((in_array($w[1], $genres)) and $count != 3) {
+                $count++;
+                if ($count == $counterT and $print_counter < $val) {
+                    //PRINT
+                    echo "$i. $t[0] ($t[1], ";
+                    if (!empty($t[2]))
+                        echo "$t[2], ";
+                    if (!empty($t[3]))
+                        echo "$t[3])";
+                    if (!empty($t[4]) and !empty($t[5])) {
+                        echo " [$t[4], $t[5]";
+                    }
+                    echo "]\n";
+                    $i++;
+                    $print_counter++;
+                }
+            }
+            else {
+                //genre not what we want. do nothing
+            }
+            $prev = $w[0];
+        }
+        $prev2 = $t[0];
+    }
+}
+?>
